@@ -1,7 +1,6 @@
 from pathlib import Path
 import json
-import urllib.parse
-import re
+import hashlib
 from dotenv import load_dotenv
 
 from utils.parser import parse_markdown, parse_pdf, parse_html
@@ -89,14 +88,18 @@ def main():
             for webpage in jd_webpages:
                 print(f"\nProcessing webpage: {webpage}")
                 try:
+                    url_hash = hashlib.md5(webpage.encode("utf-8")).hexdigest()
+
+                    existing_files = list(TMP_DIR.glob(f"*{url_hash}*"))
+                    if existing_files:
+                        print(
+                            f"Webpage already processed: {webpage} (found file with hash {url_hash}). Skipping parse_html."
+                        )
+                        continue
+
                     skills = parse_html(webpage)
                     skills_dict = skills.model_dump()
-
-                    # Generate a unique, sanitized file name from URL for safety
-                    parsed_url = urllib.parse.urlparse(webpage)
-                    combined = f"{parsed_url.netloc}{parsed_url.path}"
-                    sanitized_name = re.sub(r"[^a-zA-Z0-9]", "_", combined)
-                    filename = f"{sanitized_name.strip('_')}_skills.json"
+                    filename = f"{url_hash}_skills.json"
 
                     # Prevent overly long filenames
                     if len(filename) > 100:
