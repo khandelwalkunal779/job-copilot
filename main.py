@@ -4,7 +4,7 @@ import json
 from dotenv import load_dotenv
 
 from utils.parser import parse_markdown, parse_pdf
-from utils.func_utils import save_json
+from utils.func_utils import save_json, print_header
 
 load_dotenv()
 
@@ -19,14 +19,13 @@ EXPORTS_DIR.mkdir(exist_ok=True)
 
 
 def main():
-    print("=" * 60)
-    print("Job-Copilot")
-    print("=" * 60)
+    print_header("Job Copilot", is_main=True)
 
     # =====================================================================
     # Processing profile documents
     # =====================================================================
 
+    print_header("Processing Profile Documents")
     if not configs.get("process_profile", True):
         print(
             "Skipping profile processing: process_profile is set to False in configs."
@@ -53,8 +52,7 @@ def main():
 
         export_path = EXPORTS_DIR / f"{base_name}_skills.json"
 
-        print("\n" + "=" * 60 + "\n")
-        print(f"Processing: {filename} ({ext})")
+        print(f"\nProcessing: {filename} ({ext})")
 
         try:
             if ext == ".md":
@@ -72,6 +70,21 @@ def main():
 
         except Exception as e:
             print(f"Error processing {filename}: {e}")
+
+    # =====================================================================
+    # Processing job descriptions
+    # =====================================================================
+
+    print("\n" + "=" * 60 + "\n")
+    print_header("Processing Job Descriptions")
+
+    jd_webpages = configs.get("jd_webpages", [])
+    if not jd_webpages:
+        print("Skipping profile processing: jd_webpages is Empty in configs.")
+        return
+
+    for webpage in jd_webpages:
+        print(webpage)
 
 
 if __name__ == "__main__":
