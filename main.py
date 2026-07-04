@@ -1,48 +1,77 @@
 import os
+from pathlib import Path
 import json
 from dotenv import load_dotenv
-from parser import parse_markdown, parse_pdf
 
-# Load environment variables
+from utils.parser import parse_markdown, parse_pdf
+from utils.func_utils import save_json
+
 load_dotenv()
 
+try:
+    configs = json.loads(Path("configs.json").read_text())
+except Exception:
+    configs = {}
 
-def save_json(data_dict, file_path):
-    """Saves a dictionary as formatted JSON to the specified path."""
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(data_dict, f, indent=2, ensure_ascii=False)
-    print(f"Saved extracted skills to: {file_path}")
+DOCS_DIR = Path("./docs")
+EXPORTS_DIR = Path("./exports")
+EXPORTS_DIR.mkdir(exist_ok=True)
 
 
 def main():
-    print("Starting Job-Copilot Document Parsing Framework...")
+    print("=" * 60)
+    print("Job-Copilot")
+    print("=" * 60)
 
-    # 1. Parse data/project_desc.md
-    project_desc_path = "data/project_desc.md"
-    project_desc_export = "exports/project_desc_skills.json"
+    # =====================================================================
+    # Processing profile documents
+    # =====================================================================
 
-    print(f"\n--- Parsing Project Description: {project_desc_path} ---")
-    try:
-        project_skills = parse_markdown(project_desc_path)
-        # Convert pydantic model to dict
-        project_skills_dict = project_skills.model_dump()
-        save_json(project_skills_dict, project_desc_export)
-    except Exception as e:
-        print(f"Error parsing project description: {e}")
+    if not configs.get("process_profile", True):
+        print(
+            "Skipping profile processing: process_profile is set to False in configs."
+        )
+        return
 
-    # 2. Parse data/resume.pdf
-    resume_path = "data/resume.pdf"
-    resume_export = "exports/resume_skills.json"
+    if not DOCS_DIR.exists():
+        print(f"Error: The directory '{DOCS_DIR}' does not exist.")
+        return
 
-    print(f"\n--- Parsing Resume PDF: {resume_path} ---")
-    try:
-        resume_skills = parse_pdf(resume_path)
-        # Convert pydantic model to dict
-        resume_skills_dict = resume_skills.model_dump()
-        save_json(resume_skills_dict, resume_export)
-    except Exception as e:
-        print(f"Error parsing resume PDF: {e}")
+    files = [f for f in DOCS_DIR.iterdir() if f.is_file()]
+    if not files:
+        print(f"No files found in '{DOCS_DIR}' directory to process.")
+        return
+
+    print(
+        f"Found {len(files)} files in '{DOCS_DIR}'. Processing based on file extensions..."
+    )
+
+    for file_path in files:
+        filename = file_path.name
+        ext = file_path.suffix.lower()
+        base_name = file_path.stem
+
+        export_path = EXPORTS_DIR / f"{base_name}_skills.json"
+
+        print("\n" + "=" * 60 + "\n")
+        print(f"Processing: {filename} ({ext})")
+
+        try:
+            if ext == ".md":
+                skills = parse_markdown(str(file_path))
+            elif ext == ".pdf":
+                skills = parse_pdf(str(file_path))
+            else:
+                print(
+                    f"Skipping unsupported file extension '{ext}' for file '{filename}'."
+                )
+                continue
+
+            skills_dict = skills.model_dump()
+            save_json(skills_dict, str(export_path))
+
+        except Exception as e:
+            print(f"Error processing {filename}: {e}")
 
 
 if __name__ == "__main__":

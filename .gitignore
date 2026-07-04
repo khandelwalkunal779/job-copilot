@@ -218,5 +218,8 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Large Files
-data
+docs
 exports
+
+# Temporary Files
+tmp
