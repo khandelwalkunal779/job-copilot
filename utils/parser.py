@@ -1,13 +1,12 @@
 import os
+import requests
+from html.parser import HTMLParser
 from typing import Dict, List, Optional
+
 from pydantic import BaseModel, Field
 from google import genai
-from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
-
-# Load environment variables
-load_dotenv()
 
 # =====================================================================
 # Pydantic Schemas for Structured JSON Output
@@ -195,3 +194,64 @@ Analyze the attached resume PDF document and extract objective skills and techni
         print("Cleaning up uploaded file from Gemini...")
         client.files.delete(name=uploaded_file.name)
         print("Cleanup complete.")
+
+
+def parse_html(url: str) -> ExtractedInformation:
+    """Fetches a webpage URL, extracts text from the HTML, and parses structured skills using Gemini."""
+
+    class HTMLTextExtractor(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.result = []
+            self.in_script_or_style = False
+
+        def handle_starttag(self, tag, attrs):
+            if tag in ("script", "style"):
+                self.in_script_or_style = True
+
+        def handle_endtag(self, tag):
+            if tag in ("script", "style"):
+                self.in_script_or_style = False
+
+        def handle_data(self, data):
+            if not self.in_script_or_style:
+                text = data.strip()
+                if text:
+                    self.result.append(text)
+
+        def get_text(self):
+            return "\n".join(self.result)
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        )
+    }
+
+    print(f"Fetching job description webpage: {url}...")
+    response = requests.get(url, headers=headers, timeout=15)
+    response.raise_for_status()
+
+    # Parse and extract raw text from HTML body
+    extractor = HTMLTextExtractor()
+    extractor.feed(response.text)
+    extracted_text = extractor.get_text()
+
+    llm = get_llm()
+    structured_llm = llm.with_structured_output(ExtractedInformation)
+
+    prompt = f"""
+You are an expert technical recruiter and job description analyst.
+Analyze the following extracted text content from a job description webpage and extract required objective skills and technical skills.
+
+{SCORING_RUBRIC}
+
+Webpage Content:
+---
+{extracted_text}
+---
+"""
+    print("Invoking Gemini for HTML content parsing...")
+    return structured_llm.invoke(prompt)
