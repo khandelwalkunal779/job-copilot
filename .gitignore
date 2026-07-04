@@ -226,3 +226,6 @@ exports
 
 # Temporary Files
 tmp
+
+# Configuration Settings
+configs.json

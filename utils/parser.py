@@ -199,28 +199,52 @@ Analyze the attached resume PDF document and extract objective skills and techni
 def parse_html(url: str) -> ExtractedInformation:
     """Fetches a webpage URL, extracts text from the HTML, and parses structured skills using Gemini."""
 
+    import html
+
     class HTMLTextExtractor(HTMLParser):
         def __init__(self):
             super().__init__()
             self.result = []
+            self.meta_info = []
             self.in_script_or_style = False
+            self.in_ld_json = False
 
         def handle_starttag(self, tag, attrs):
-            if tag in ("script", "style"):
+            attrs_dict = dict(attrs)
+            if tag == "meta":
+                name = attrs_dict.get("name") or attrs_dict.get("property")
+                content = attrs_dict.get("content")
+                if name in ("description", "og:description", "title", "og:title") and content:
+                    self.meta_info.append(f"{name}: {html.unescape(content)}")
+            elif tag == "script":
+                script_type = attrs_dict.get("type", "").lower()
+                if "ld+json" in script_type:
+                    self.in_ld_json = True
+                else:
+                    self.in_script_or_style = True
+            elif tag == "style":
                 self.in_script_or_style = True
 
         def handle_endtag(self, tag):
-            if tag in ("script", "style"):
+            if tag == "script":
+                self.in_ld_json = False
+                self.in_script_or_style = False
+            elif tag == "style":
                 self.in_script_or_style = False
 
         def handle_data(self, data):
-            if not self.in_script_or_style:
-                text = data.strip()
-                if text:
-                    self.result.append(text)
+            unescaped_data = html.unescape(data).strip()
+            if self.in_ld_json:
+                if unescaped_data:
+                    self.result.append(f"\n[Structured Metadata (JSON-LD)]\n{unescaped_data}\n")
+            elif not self.in_script_or_style:
+                if unescaped_data:
+                    self.result.append(unescaped_data)
 
         def get_text(self):
-            return "\n".join(self.result)
+            header = "\n".join(self.meta_info)
+            body = "\n".join(self.result)
+            return f"{header}\n\n{body}"
 
     headers = {
         "User-Agent": (
